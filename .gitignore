@@ -1,0 +1,12 @@
+.DS_Store
+
+# Xcode user-specific files
+*.xcuserstate
+xcuserdata/
+
+# Local build and preview artifacts
+dist/
+tmp_app_icon_preview.png
+
+# Legacy reference project kept locally only
+PythonProject/

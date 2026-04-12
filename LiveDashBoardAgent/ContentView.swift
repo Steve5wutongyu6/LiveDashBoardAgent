@@ -2,58 +2,106 @@
 //  ContentView.swift
 //  LiveDashBoardAgent
 //
-//  Created by Steve5wutongyu6 on 2026/4/12.
+//  Created by Codex on 2026/4/12.
 //
 
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @ObservedObject var store: AgentDashboardStore
+    @State private var selectedTab: DashboardPanelTab = .statusOverview
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        VStack(alignment: .leading, spacing: 12) {
+            headerView
+            DashboardTabSection(selectedTab: $selectedTab, store: store)
+            actionsSection
+        }
+        .padding(12)
+        .frame(width: 440, height: 650, alignment: .topLeading)
+        .background(Color.clear)
+    }
+
+    private var headerView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    Circle()
+                        .fill(headerAccentColor)
+                        .frame(width: 10, height: 10)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.appHeaderTitle)
+                            .font(.headline.weight(.semibold))
                     }
                 }
-                .onDelete(perform: deleteItems)
+
+                Spacer(minLength: 8)
+
+                Button(L10n.appQuitAction, action: store.quitApplication)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.red)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .toolbar {
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
+
+            if let bannerMessage = store.bannerMessage, !bannerMessage.isEmpty {
+                Text(bannerMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.blue.opacity(0.12))
+                    )
             }
-        } detail: {
-            Text("Select an item")
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
+    private var actionsSection: some View {
+        PanelSection(title: L10n.quickActionsTitle) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Button(L10n.saveConfigurationAction, action: store.saveConfiguration)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(store.validationMessage != nil && !store.validationMessage!.isEmpty)
+
+                    Button(L10n.reloadFromDiskAction, action: store.reloadConfigurationFromDisk)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                    Button(L10n.discardUnsavedAction, action: store.discardUnsavedChanges)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(!store.hasUnsavedChanges)
+                }
+
+                Button(L10n.openConfigurationDirectoryAction, action: store.openConfigurationDirectory)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+            }
         }
     }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    private var headerAccentColor: Color {
+        switch store.runtimeState.lifecycle {
+        case .running:
+            return .green
+        case .away:
+            return .orange
+        case .waitingPermission:
+            return .yellow
+        case .configurationRequired, .error:
+            return .red
+        case .stopped:
+            return .gray
         }
     }
 }
 
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView(store: AgentDashboardStore())
+    }
 }
