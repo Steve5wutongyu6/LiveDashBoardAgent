@@ -66,11 +66,12 @@ actor NetworkReporter {
         }
 
         let endpoint = serverURL.appending(path: "api/report")
+        let reportRedactor = ReportKeywordRedactor(keywords: configuration.keywordFilters)
         let payload = ReportRequestPayload(
-            appID: appIdentifier,
-            windowTitle: String(windowTitle.prefix(256)),
+            appID: reportRedactor.redact(appIdentifier),
+            windowTitle: String(reportRedactor.redact(windowTitle).prefix(256)),
             timestamp: Int64(Date().timeIntervalSince1970 * 1000),
-            extra: extra
+            extra: reportRedactor.redact(extra: extra)
         )
 
         do {

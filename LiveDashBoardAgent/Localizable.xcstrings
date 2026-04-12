@@ -213,6 +213,72 @@
         }
       }
     },
+    "configuration.keyword_filter.empty_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "留空则不做替换"
+          }
+        }
+      }
+    },
+    "configuration.keyword_filter.enabled_count_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前生效 %lld 个关键词"
+          }
+        }
+      }
+    },
+    "configuration.keyword_filter.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关键词"
+          }
+        }
+      }
+    },
+    "configuration.keyword_filter.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "例如：微信|密码|会议室"
+          }
+        }
+      }
+    },
+    "configuration.keyword_filter.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用 | 分隔多个关键词，命中的上报内容会替换为 ***"
+          }
+        }
+      }
+    },
+    "configuration.keyword_filter.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关键词过滤"
+          }
+        }
+      }
+    },
     "configuration.heartbeat.label" : {
       "extractionState" : "manual",
       "localizations" : {

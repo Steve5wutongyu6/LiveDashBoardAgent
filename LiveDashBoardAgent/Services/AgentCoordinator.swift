@@ -72,6 +72,7 @@ actor AgentCoordinator {
         var previousAppName: String?
         var previousWindowTitle: String?
         var lastReportAt: Date?
+        let reportRedactor = ReportKeywordRedactor(keywords: configuration.keywordFilters)
 
         await AppLogger.shared.info(
             "开始监控循环",
@@ -194,8 +195,8 @@ actor AgentCoordinator {
                             "已上报前台窗口变化",
                             category: "Agent",
                             metadata: [
-                                "app": foregroundSnapshot.appName,
-                                "title": String(foregroundSnapshot.windowTitle.prefix(80))
+                                "app": reportRedactor.redact(foregroundSnapshot.appName),
+                                "title": String(reportRedactor.redact(foregroundSnapshot.windowTitle).prefix(80))
                             ]
                         )
                     }

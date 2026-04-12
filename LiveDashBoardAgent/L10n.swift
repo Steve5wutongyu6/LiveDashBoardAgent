@@ -27,6 +27,11 @@ enum L10n {
     static let configurationAfkThresholdLabel = tr("configuration.afk_threshold.label")
     static let configurationEnableLogTitle = tr("configuration.enable_log.title")
     static let configurationEnableLogSubtitle = tr("configuration.enable_log.subtitle")
+    static let configurationKeywordFilterTitle = tr("configuration.keyword_filter.title")
+    static let configurationKeywordFilterSubtitle = tr("configuration.keyword_filter.subtitle")
+    static let configurationKeywordFilterLabel = tr("configuration.keyword_filter.label")
+    static let configurationKeywordFilterPlaceholder = tr("configuration.keyword_filter.placeholder")
+    static let configurationKeywordFilterEmptyHint = tr("configuration.keyword_filter.empty_hint")
     static let configurationValidationSuccess = tr("configuration.validation.success")
     static let permissionPanelTitle = tr("permission.panel.title")
     static let permissionGrantedTitle = tr("permission.granted.title")
@@ -127,6 +132,16 @@ enum L10n {
      */
     static func configurationSaveFailed(_ reason: String) -> String {
         tr("banner.configuration.save_failed", reason)
+    }
+
+    /**
+     * 生成关键词过滤配置的摘要文案，方便用户确认当前会参与脱敏的关键词数量
+     *
+     * - Parameter count: 当前生效的关键词数量
+     * - Returns: 配置页中展示的数量说明文案
+     */
+    static func configurationKeywordFilterEnabledCount(_ count: Int) -> String {
+        tr("configuration.keyword_filter.enabled_count_format", Int64(count))
     }
 
     /**
