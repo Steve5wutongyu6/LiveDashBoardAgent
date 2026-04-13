@@ -1,0 +1,174 @@
+name: Xcode Nightly Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+      timezone: "Asia/Taipei"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-nightly-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build universal macOS artifact and publish Release
+    runs-on: macos-latest
+    env:
+      TZ: Asia/Taipei
+      PROJECT_PATH: LiveDashBoardAgent.xcodeproj
+      SCHEME: LiveDashBoardAgent
+      CONFIGURATION: Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        shell: bash
+        run: xcodebuild -version
+
+      - name: Archive universal macOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DERIVED_DATA_PATH="$RUNNER_TEMP/LiveDashBoardAgentDerivedData"
+          ARCHIVE_PATH="$RUNNER_TEMP/LiveDashBoardAgent.xcarchive"
+
+          rm -rf "$DERIVED_DATA_PATH" "$ARCHIVE_PATH"
+
+          xcodebuild \
+            clean archive \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "generic/platform=macOS" \
+            -archivePath "$ARCHIVE_PATH" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package nightly assets
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_PATH="$RUNNER_TEMP/LiveDashBoardAgent.xcarchive"
+          EXPORT_DIR="$RUNNER_TEMP/nightly-release"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/LiveDashBoardAgent.app"
+          APP_BINARY="$APP_PATH/Contents/MacOS/LiveDashBoardAgent"
+          DSYM_SOURCE="$ARCHIVE_PATH/dSYMs/LiveDashBoardAgent.app.dSYM"
+
+          rm -rf "$EXPORT_DIR"
+          mkdir -p "$EXPORT_DIR"
+
+          if [ ! -f "$APP_BINARY" ]; then
+            echo "::error::Missing app binary at $APP_BINARY"
+            exit 1
+          fi
+
+          BINARY_ARCHS="$(lipo -archs "$APP_BINARY")"
+          echo "Binary architectures: $BINARY_ARCHS"
+
+          case "$BINARY_ARCHS" in
+            *arm64*x86_64*|*x86_64*arm64*)
+              ;;
+            *)
+              echo "::error::Expected a universal binary containing arm64 and x86_64, got: $BINARY_ARCHS"
+              exit 1
+              ;;
+          esac
+
+          BUILD_STAMP="$(date '+%Y%m%d-%H%M%S')"
+          BUILD_NAME="$(date '+%Y-%m-%d %H:%M:%S') Nightly"
+          RELEASE_TAG="nightly-$BUILD_STAMP"
+          ARTIFACT_STEM="LiveDashBoardAgent-$BUILD_STAMP-Nightly"
+          APP_ZIP_PATH="$EXPORT_DIR/$ARTIFACT_STEM-macos-universal.zip"
+          DSYM_ZIP_PATH="$EXPORT_DIR/$ARTIFACT_STEM-dSYM.zip"
+          CHECKSUM_PATH="$EXPORT_DIR/$ARTIFACT_STEM-SHA256.txt"
+          NOTES_PATH="$EXPORT_DIR/$ARTIFACT_STEM-release-notes.md"
+          XCODE_VERSION="$(xcodebuild -version | paste -sd ' ' -)"
+
+          ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"
+
+          if [ -d "$DSYM_SOURCE" ]; then
+            ditto -c -k --keepParent "$DSYM_SOURCE" "$DSYM_ZIP_PATH"
+          else
+            echo "::warning::dSYM not found at $DSYM_SOURCE"
+            DSYM_ZIP_PATH=""
+          fi
+
+          if [ -n "$DSYM_ZIP_PATH" ]; then
+            shasum -a 256 "$APP_ZIP_PATH" "$DSYM_ZIP_PATH" > "$CHECKSUM_PATH"
+          else
+            shasum -a 256 "$APP_ZIP_PATH" > "$CHECKSUM_PATH"
+          fi
+
+          cat > "$NOTES_PATH" <<EOF
+          Automated nightly build for LiveDashBoardAgent.
+
+          - Build name: $BUILD_NAME
+          - Commit: $GITHUB_SHA
+          - Xcode: $XCODE_VERSION
+          - Architectures: $BINARY_ARCHS
+          - Minimum macOS: 13.0
+
+          This artifact is built by GitHub Actions with code signing disabled.
+          EOF
+
+          {
+            echo "release_tag=$RELEASE_TAG"
+            echo "artifact_stem=$ARTIFACT_STEM"
+            echo "app_zip_path=$APP_ZIP_PATH"
+            echo "dsym_zip_path=$DSYM_ZIP_PATH"
+            echo "checksum_path=$CHECKSUM_PATH"
+            echo "notes_path=$NOTES_PATH"
+            echo "binary_archs=$BINARY_ARCHS"
+            echo "build_name<<EOF"
+            echo "$BUILD_NAME"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_stem }}
+          path: |
+            ${{ steps.package.outputs.app_zip_path }}
+            ${{ steps.package.outputs.dsym_zip_path }}
+            ${{ steps.package.outputs.checksum_path }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish nightly Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE_ARGS=(
+            "${{ steps.package.outputs.release_tag }}"
+            "${{ steps.package.outputs.app_zip_path }}"
+            "${{ steps.package.outputs.checksum_path }}"
+          )
+
+          if [ -n "${{ steps.package.outputs.dsym_zip_path }}" ]; then
+            RELEASE_ARGS+=("${{ steps.package.outputs.dsym_zip_path }}")
+          fi
+
+          RELEASE_ARGS+=(
+            --title "${{ steps.package.outputs.build_name }}"
+            --notes-file "${{ steps.package.outputs.notes_path }}"
+            --target "${GITHUB_SHA}"
+            --prerelease
+          )
+
+          gh release create "${RELEASE_ARGS[@]}"
