@@ -35,8 +35,11 @@ actor NetworkReporter {
 
     private let session: URLSession
     private let encoder = JSONEncoder()
+
     private var consecutiveFailures = 0
     private var currentBackoffSeconds = 0
+    private var pausedUntil: Date?
+    private var pausedMessage: String?
 
     init() {
         let configuration = URLSessionConfiguration.ephemeral
@@ -46,7 +49,7 @@ actor NetworkReporter {
     }
 
     /**
-     * 向后端发送一次使用状态上报，并按 Python 版本规则执行指数退避与长暂停
+     * 向后端发送一次使用状态上报，并按规则执行指数退避与长暂停
      *
      * - Parameters:
      *   - appIdentifier: 当前应用标识，AFK 时会传 `idle`
@@ -61,6 +64,16 @@ actor NetworkReporter {
         extra: AgentReportExtra?,
         configuration: AgentConfiguration
     ) async -> ReportSendResult {
+        if let pausedUntil, pausedUntil > Date() {
+            return .failure(
+                backoffSeconds: Int(ceil(pausedUntil.timeIntervalSinceNow)),
+                message: pausedMessage ?? L10n.networkPauseAfterFailures(
+                    failureCount: Constants.pauseAfterFailureCount,
+                    pauseSeconds: Constants.pauseDurationSeconds
+                )
+            )
+        }
+
         guard let serverURL = configuration.serverURL else {
             return .failure(backoffSeconds: 0, message: L10n.validationServerURLInvalid)
         }
@@ -87,6 +100,8 @@ actor NetworkReporter {
             if [200, 201, 409].contains(statusCode) {
                 consecutiveFailures = 0
                 currentBackoffSeconds = 0
+                pausedUntil = nil
+                pausedMessage = nil
                 return .success
             }
 
@@ -102,7 +117,32 @@ actor NetworkReporter {
     }
 
     /**
-     * 更新失败统计并按策略返回退避信息，必要时执行长时间暂停保护
+     * 在网络恢复或系统链路切换后清空失败统计，避免长暂停阻塞新的即时上报
+     *
+     * - Parameter reason: 触发重置的原因，便于写日志定位
+     * - Returns: 无返回值
+     */
+    func resetFailureState(reason: String) async {
+        let hadBackoff = consecutiveFailures > 0 || currentBackoffSeconds > 0 || (pausedUntil?.timeIntervalSinceNow ?? 0) > 0
+
+        consecutiveFailures = 0
+        currentBackoffSeconds = 0
+        pausedUntil = nil
+        pausedMessage = nil
+
+        guard hadBackoff else {
+            return
+        }
+
+        await AppLogger.shared.info(
+            "网络恢复后已清除上报退避",
+            category: "Reporter",
+            metadata: ["reason": reason]
+        )
+    }
+
+    /**
+     * 更新失败统计并按策略返回退避信息，必要时记录长暂停窗口但不阻塞调用方
      *
      * - Parameter message: 当前失败的原因说明
      * - Returns: 带退避时间的失败结果
@@ -124,37 +164,25 @@ actor NetworkReporter {
         )
 
         if consecutiveFailures >= Constants.pauseAfterFailureCount {
+            let pauseMessage = L10n.networkPauseAfterFailures(
+                failureCount: Constants.pauseAfterFailureCount,
+                pauseSeconds: Constants.pauseDurationSeconds
+            )
+
             await AppLogger.shared.warning(
                 "连续上报失败次数过多，开始长暂停",
                 category: "Reporter",
                 metadata: ["pause": "\(Constants.pauseDurationSeconds)"]
             )
-            await sleep(seconds: Constants.pauseDurationSeconds)
+
+            pausedUntil = Date().addingTimeInterval(Double(Constants.pauseDurationSeconds))
+            pausedMessage = pauseMessage
             consecutiveFailures = 0
             currentBackoffSeconds = 0
-            return .failure(
-                backoffSeconds: 0,
-                message: L10n.networkPauseAfterFailures(
-                    failureCount: Constants.pauseAfterFailureCount,
-                    pauseSeconds: Constants.pauseDurationSeconds
-                )
-            )
+
+            return .failure(backoffSeconds: Constants.pauseDurationSeconds, message: pauseMessage)
         }
 
         return .failure(backoffSeconds: currentBackoffSeconds, message: message)
-    }
-
-    /**
-     * 执行异步秒级等待，供指数退避和长暂停复用
-     *
-     * - Parameter seconds: 等待秒数，`0` 时直接返回
-     */
-    private func sleep(seconds: Int) async {
-        guard seconds > 0 else {
-            return
-        }
-
-        let nanoseconds = UInt64(seconds) * 1_000_000_000
-        try? await Task.sleep(nanoseconds: nanoseconds)
     }
 }
