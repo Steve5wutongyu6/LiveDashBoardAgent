@@ -6,6 +6,10 @@ LiveDashBoardAgent 是一个运行在 macOS 菜单栏中的轻量状态上报代
 
 # 需要注意：CI构建的安装包实测安装后存在无法授权辅助功能权限的问题，请克隆项目后自行在本机用XCode打包安装
 
+
+# 友情链接
+[![](https://github.com/user-attachments/assets/d7efc376-3a41-4d7b-9450-47e3b9e7cf2c)](https://linux.do)
+
 ## 功能概览
 
 - 菜单栏常驻，点击后弹出状态面板
