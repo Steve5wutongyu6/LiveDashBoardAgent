@@ -23,6 +23,7 @@ final class AgentDashboardStore: ObservableObject {
     @Published private(set) var bannerMessage: String?
 
     private let accessibilityPermissionService = AccessibilityPermissionService()
+    private let accessibilityPermissionMonitor = AccessibilityPermissionMonitor()
     private let configurationStore = ConfigurationStore()
     private let coordinator = AgentCoordinator()
 
@@ -35,8 +36,11 @@ final class AgentDashboardStore: ObservableObject {
         self.persistedConfiguration = .default
         self.draftConfiguration = .default
         self.runtimeState = .initial
+        self.runtimeState.accessibilityGranted = accessibilityPermissionService.isTrusted(promptIfNeeded: false)
         self.validationMessage = AgentConfiguration.default.validationMessage()
         self.bannerMessage = nil
+
+        startAccessibilityPermissionMonitoring()
 
         Task { [weak self] in
             await self?.bootstrap()
@@ -44,6 +48,8 @@ final class AgentDashboardStore: ObservableObject {
     }
 
     deinit {
+        accessibilityPermissionMonitor.stopMonitoring()
+
         let coordinator = self.coordinator
         Task {
             await coordinator.stopMonitoring()
@@ -221,6 +227,42 @@ final class AgentDashboardStore: ObservableObject {
      */
     private func synchronizeDraftValidation() {
         validationMessage = draftConfiguration.sanitized().validationMessage()
+    }
+
+    /**
+     * 启动辅助功能权限监听，让系统设置中的授权变化能尽快同步到界面和监控层
+     *
+     * - Returns: 无返回值
+     */
+    private func startAccessibilityPermissionMonitoring() {
+        accessibilityPermissionMonitor.startMonitoring { [weak self] granted in
+            guard let self else {
+                return
+            }
+
+            await self.handleAccessibilityPermissionStatusChanged(granted)
+        }
+    }
+
+    /**
+     * 处理辅助功能权限变化，刷新 UI 展示并通知协调器做一次快速状态重算
+     *
+     * - Parameter isGranted: 当前最新的授权状态
+     * - Returns: 无返回值
+     */
+    private func handleAccessibilityPermissionStatusChanged(_ isGranted: Bool) async {
+        let previousGranted = runtimeState.accessibilityGranted
+        runtimeState.accessibilityGranted = isGranted
+
+        guard previousGranted != isGranted else {
+            return
+        }
+
+        if isGranted {
+            bannerMessage = L10n.bannerPermissionAvailable
+        }
+
+        await coordinator.handleAccessibilityPermissionChanged(isGranted: isGranted)
     }
 
     /**
