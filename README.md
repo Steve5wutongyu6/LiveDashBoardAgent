@@ -8,7 +8,10 @@ LiveDashBoardAgent 是一个运行在 macOS 菜单栏中的轻量状态上报代
 
 
 # 友情链接
-[![](https://github.com/user-attachments/assets/d7efc376-3a41-4d7b-9450-47e3b9e7cf2c)](https://linux.do)
+
+<a href="https://linux.do">
+  <img src="https://github.com/user-attachments/assets/d7efc376-3a41-4d7b-9450-47e3b9e7cf2c" width="200" alt="Linux.do">
+</a>
 
 ## 功能概览
 
