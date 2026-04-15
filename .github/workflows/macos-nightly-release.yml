@@ -2,9 +2,9 @@ name: Xcode Nightly Release
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"
-      timezone: "Asia/Taipei"
+  # schedule:
+  #   - cron: "0 3 * * *"
+  #     timezone: "Asia/Taipei"
 
 permissions:
   contents: write
